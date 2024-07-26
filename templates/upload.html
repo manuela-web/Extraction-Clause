@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.3/socket.io.js"></script>
+    <title>Carica File PDF</title>
+    <style>
+        /* Aggiungi stili CSS per il contenitore principale */
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .text-container {
+            margin-top: 50px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            flex-direction: row;
+        }
+        .custom-text {
+            padding: 10px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 100%;
+            resize: none;
+            word-break: break-all;
+            text-align: left;
+            height: 200px;
+            font-family: Arial, sans-serif;
+        }
+        .text-container button {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .text-container button:hover {
+            background-color: #219a54;
+        }
+        /* Aggiungi stili CSS per la navbar */
+        .navbar {
+            background-color: #333;
+            padding: 10px;
+            width: 100%;
+            position: fixed;
+            top: 0;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin: 10px;
+        }
+        body {
+            margin: 0;
+        }
+        /* Aggiungi stili CSS per il contenuto */
+        .content {
+            background-size: cover;
+            background-position: center;
+            text-align: center;
+            background-color: #75BFE4;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 40%;
+        }
+        /* Aggiungi uno sfondo al contenuto */
+        .content::after {
+            content: '';
+            background-image: url("https://d3npc921eoaj06.cloudfront.net/wp-content/uploads/2019/06/01170637/wpa-1.jpg");
+            background-size: cover;
+            background-position: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        h1, form {
+            margin: 10px;
+            color: white;
+        }
+        form {
+            text-align: center;
+        }
+        label.upload-btn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        label.upload-btn:hover {
+            background-color: #2980b9;
+        }
+        button[type="submit"] {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        button[type="submit"]:hover {
+            background-color: #219a54;
+        }
+        .labeling {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .file-name {
+            margin-top: 10px;
+            display: inline-block;
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 10px 10px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .small-input {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            font-size: 13px;
+            max-width: 100px;
+        }
+        .upload-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+        label, button, .file-name {
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #333;
+        }
+        #Progress_Status {
+            width: 100%;
+            background-color: #ddd;
+        }
+        #progressBar {
+            margin-top: 20px;
+            width: 0%;
+            height: 10px;
+            transition: width 0.5s;
+            background-color: #4CAF50;
+            display: none;
+        }
+        .form-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 20px;
+            margin-top: 20px;
+        }
+        .form-row input, .form-row label, .form-row button {
+            flex: 1;
+            margin: 5px;
+        }
+    </style>
+    <script>
+        window.onload= function(){
+            var labelBtn = document.getElementById("labelBtn");
+            if (labelBtn) {
+                labelBtn.addEventListener("click", function () {
+                    window.location.href = "/label.html";
+                });
+            } else {
+                console.error("Elemento con id 'labelBtn' non trovato.");
+            }
+
+            document.getElementById('file-input').addEventListener('change', function() {
+                const fileNameDisplay = document.getElementById('file-name');
+                const fileName = this.files[0] ? this.files[0].name : 'Nessun file selezionato';
+                fileNameDisplay.textContent = fileName;
+            });
+
+            const socket = io();
+            socket.connect('http://' + document.domain + ':' + location.port);
+            let progressBar = document.getElementById("progressBar");
+            let socketid = undefined;
+
+            socket.on("connect", function(){
+                console.log("Connesso");
+                socketid = socket.id;
+                console.log("ID:" +socketid);
+            });
+
+            let mainForm = document.getElementById("mainForm");
+            mainForm.onsubmit = function (event) {
+                event.preventDefault();
+                progressBar.style.width = '0%';
+                document.getElementById("progressBar").style.display = 'block';
+                const formData = new FormData(mainForm);
+
+                fetch("/progress/<socketid>" + socketid, {
+                    method: "POST",
+                    body: formData
+                });
+            }
+
+            socket.on('processing_complete', function(msg) {
+                var element = document.getElementById("progressBar");
+                setTimeout(function() {
+                    alert(msg.message);
+                    element.style.display = 'none';
+                }, 500);     
+            });
+
+            socket.on("update_progress", function (data) {
+                const progress = data.progress;
+                console.log("Got progress: " + progress);
+                progressBar.style.width = progress + "%";
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="navbar">
+        <a href="#">Home</a>
+        <a href="#">Servizi</a>
+        <a href="#">Contatti</a>
+    </div>
+    <div class="container">
+        <div class="content">
+            <h1>Carica un file PDF</h1>
+            <form id="mainForm" method="post" enctype="multipart/form-data">
+                <div class="upload-container">
+                    <label for="file-input" class="upload-btn">Scegli un file</label>
+                    <input type="file" name="pdfFile" id="file-input" accept=".pdf" style="display: none;" />
+                    <span id="file-name" class="file-name">Nessun file selezionato</span>
+                    <input type="number" name="inizio" placeholder="Inizio clausole" class="small-input">
+                    <input type="number" name="fine" placeholder="Fine clausole" class="small-input">
+                </div>
+                <div class="check">
+                    <input type="radio" id="testoIntero" name="tipoTesto" value="intero" checked>
+                    <label for="testoIntero">Testo intero</label>
+                    <input type="radio" id="testoSegmentato" name="tipoTesto" value="segmentato">
+                    <label for="testoSegmentato">Testo segmentato</label>
+                </div>
+                <div class="form-row">
+                    <label for="regex">Pattern Regex:</label>
+                    <input type="text" name="regex" id="regex" value="(?:(?<=^)|(?<=\n))\d+\.\s[^\d\n].*?(?=(?:\d+\.\s[^\d\n]|$))" class="small-input">
+                    <label for="x">Coordinata X:</label>
+                    <input type="number" name="x" id="x" value="0" class="small-input">
+                    <label for="y">Coordinata Y:</label>
+                    <input type="number" name="y" id="y" value="115" class="small-input">
+                </div>
+                <div class="form-row">
+                    <label for="larghezza">Larghezza:</label>
+                    <input type="number" name="larghezza" id="larghezza" value="600" class="small-input">
+                    <label for="altezza">Altezza:</label>
+                    <input type="number" name="altezza" id="altezza" value="675" class="small-input">
+                    <button type="submit" id="caricaBtn">Carica</button>
+                </div>
+                <div id="Progress_Status">
+                    <div id="progressBar" class="unloaded"></div>
+                </div>
+            </form>
+
+            <form id="textSubmitForm" method="post">
+                <!-- Aggiungi la casella di testo e il bottone -->
+                <div class="text-container">
+                    <textarea class="custom-text" placeholder="Inserisci del testo"></textarea>
+                    <button class="upload-btn">Invia</button>
+                </div>
+            </form>
+
+            <div>
+                <button id="labelBtn" class="labeling">Label</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
